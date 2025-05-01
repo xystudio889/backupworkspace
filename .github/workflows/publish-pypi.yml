@@ -1,0 +1,56 @@
+# This workflow will install Python dependencies, run tests and lint with a variety of Python versions.
+   
+name: build_and_publish
+
+on:
+  push:
+    branches: [ "master", "develop", "2.0-update" ] #, "2.0-develop", "2.1-update" ]
+  pull_request:
+    branches: [ "develop", "2.0-update" ]
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.x'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install build twine setuptools wheel
+
+    - name: Build package
+      run: python -m build
+
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with: 
+        name: dist-package
+        path: |
+          dist/*.whl
+          dist/*.tar.gz
+
+    - name: Create draft release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: github_actions_release
+        name: "Release file by GitHub Actions"
+        draft: true
+        files: dist/*
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Publish to PyPI
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+      run: twine upload dist/*
