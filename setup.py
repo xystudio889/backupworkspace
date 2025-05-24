@@ -2,14 +2,14 @@ from setuptools import setup, find_packages
 
 setup(
     name="backupworkspace",
-    version="0.1.0",
+    version="0.2.0",
     package_dir={"": "src"},
     packages=find_packages(where="src"),
     install_requires=[],
     python_requires=">=3.8",
     author="xystudio",
     author_email="173288240@qq.com",
-    description="For the expansion of python content, it covers science, debugging and other fields.",
+    description="Quickly back up your workspace.",
     long_description=open("README-PYPI.md", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
     license="MIT",
@@ -28,4 +28,5 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
     ],
+    keywords = ["config", "configure", "toml"]
 )

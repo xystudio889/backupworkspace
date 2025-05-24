@@ -5,11 +5,16 @@ from datetime import datetime, timezone
 import hashlib
 from os import makedirs
 
-__all__ = ["BackupManager", "manager"]
+__all__ = ["BackupManager", "manager", "WILDCARD", "EXACT"]
+
+__version__ = "0.2.0"
 
 backup_path = Path.cwd() / ".xystudio" / "backup"
 
 makedirs(backup_path, exist_ok=True)
+
+WILDCARD = "wildcard"
+EXACT = "exact"
 
 class BackupManager:
     def __init__(self):
@@ -57,7 +62,7 @@ class BackupManager:
         matched = []
 
         for file in backups:
-            name_part = file.stem.split("-")[-1][:-4]
+            name_part = "".join(file.stem.split("-")[-1].split(".")[:-1])
             if name_part == backup_name:
                 matched.append(file)
 
@@ -82,7 +87,7 @@ class BackupManager:
         matched = []
 
         for file in backups:
-            name_part = file.stem.split("-")[-1][:-4]
+            name_part = "".join(file.stem.split("-")[-1].split(".")[:-1])
             if name_part == backup_name:
                 matched.append(file)
 
@@ -170,10 +175,110 @@ class BackupManager:
     def _sanitize_filename(self, name: str) -> str:
         return re.sub(r'[\\/*?:"<>|]', "_", name)
 
+    def get_backup_hash(self, backup_name: str, index: int = None) -> str:
+        """获取备份文件的 SHA256 哈希值"""
+        backups = list(Path(".xystudio", "backup").glob("*.tar.gz"))
+        matched = []
+        for file in backups:
+            name_part = "".join(file.stem.split("-")[-1].split(".")[:-1])
+            print(name_part)
+            if name_part == backup_name:
+                matched.append(file)
+
+        if not matched:
+            raise ValueError(f"Backup not found: {backup_name}")
+
+        if len(matched) > 1 and index is None:
+            final_match = [f"{i}: {file.name}" for i, file in enumerate(matched)]
+            raise ValueError("Must specify index parameter\nAvailable options:\n" + "\n".join(final_match))
+
+        target = matched[index] if index is not None else matched[0]
+
+        sha256_hash = hashlib.sha256()
+        with open(target, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest()
+
+    def verify_backup_hash(self, backup_name: str, expected_hash: str, index: int = None) -> bool:
+        """验证备份文件的 SHA256 哈希"""
+        actual_hash = self.get_backup_hash(backup_name, index)
+        return actual_hash.lower() == expected_hash.lower()
+
+def _write_exclude_rules(rules):
+    import pickle
+
+    with open(backup_path / "excludes.exc", "ab") as f:
+        pickle.dump(rules, f)
+
+def _read_exclude_rules():
+    import pickle
+
+    with open(backup_path / "excludes.exc", "rb") as f:
+        exclude_rules = pickle.load(f)
+
+    manager.exclude_rules = exclude_rules
+    return exclude_rules
+
 manager = BackupManager()
 
 def main():
-    pass
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Backup manager")
+    subparsers = parser.add_subparsers(dest="command")
+
+    manager.exclude_rules = _read_exclude_rules()
+
+    create_parser = subparsers.add_parser("create", help="Create a backup")
+    create_parser.add_argument("name", help="Name of the backup")
+
+    delete_parser = subparsers.add_parser("delete", help="Delete a backup")
+    delete_parser.add_argument("name", help="Name of the backup")
+    delete_parser.add_argument("-i", "--index", type=int, help="Index of the backup to delete")
+
+    extract_parser = subparsers.add_parser("extract", help="Extract a backup")
+    extract_parser.add_argument("name", help="Name of the backup")
+    extract_parser.add_argument("-i", "--index", type=int, help="Index of the backup to extract")
+
+    verify_parser = subparsers.add_parser("verify", help="Verify a backup")
+    verify_parser.add_argument("name", help="Name of the backup")
+    verify_parser.add_argument("hash", help="Expected SHA256 hash of the backup")
+    verify_parser.add_argument("-i", "--index", type=int, help="Index of the backup to verify")
+
+    exclude_parser = subparsers.add_parser("exclude", help="Add an exclusion rule")
+    exclude_parser.add_argument("pattern", help="Pattern to exclude")
+    exclude_parser.add_argument(
+        "-t", "--type", default="wildcard", choices=["exact", "wildcard"], help="Type of match"
+    )
+
+    get_hash_parser = subparsers.add_parser("get_hash", help="Get the SHA256 hash of a backup")
+    get_hash_parser.add_argument("name", help="Name of the backup")
+    get_hash_parser.add_argument("-i", "--index", type=int, help="Index of the backup to get the hash")
+
+    args = parser.parse_args()
+
+    if args.command == "create":
+        backup_path = manager.create_backup(args.name)
+        print(f"Backup created: {backup_path}")
+    elif args.command == "delete":
+        manager.delete_backup(args.name, args.index)
+        print(f"Backup deleted: {args.name}")
+    elif args.command == "extract":
+        manager.extract_backup(args.name, args.index)
+    elif args.command == "verify":
+        if manager.verify_backup_hash(args.name, args.hash, args.index):
+            print(f"Backup verified: {args.name}")
+        else:
+            print(f"Backup verification failed: {args.name}")
+    elif args.command == "exclude":
+        manager.add_exclusion_rule(args.pattern, args.type)
+        _write_exclude_rules(manager.exclude_rules)
+        print(f"Exclusion rule added: {args.pattern}")
+    elif args.command == "get_hash":
+        print(manager.get_backup_hash(args.name, args.index))
+    else:
+        parser.print_help()
 
 if __name__ == "__main__":
     main()
