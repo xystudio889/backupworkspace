@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "backupworkspace"
-version = "0.2.0"
+version = "0.2.1"
 authors = [{ name = "xystudio", email = "173288240@qq.com" }]
 description = "Quickly back up your workspace."
 readme = { file = "README-PYPI.md", content-type = "text/markdown" }
@@ -20,6 +20,6 @@ keywords = [ "backup", "git", "workspace", "snapshot"]
 [project.optional-dependencies]
 dev = []
 [project.scripts]
-tomlconfigurer = "backup:main"
+backup = "backup:main"
 [tool.setuptools.package-dir]
 backup = "src/backup"

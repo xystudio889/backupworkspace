@@ -7,7 +7,7 @@ from os import makedirs
 
 __all__ = ["BackupManager", "manager", "WILDCARD", "EXACT"]
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
 
 backup_path = Path.cwd() / ".xystudio" / "backup"
 
@@ -176,12 +176,10 @@ class BackupManager:
         return re.sub(r'[\\/*?:"<>|]', "_", name)
 
     def get_backup_hash(self, backup_name: str, index: int = None) -> str:
-        """获取备份文件的 SHA256 哈希值"""
         backups = list(Path(".xystudio", "backup").glob("*.tar.gz"))
         matched = []
         for file in backups:
             name_part = "".join(file.stem.split("-")[-1].split(".")[:-1])
-            print(name_part)
             if name_part == backup_name:
                 matched.append(file)
 
@@ -201,26 +199,30 @@ class BackupManager:
         return sha256_hash.hexdigest()
 
     def verify_backup_hash(self, backup_name: str, expected_hash: str, index: int = None) -> bool:
-        """验证备份文件的 SHA256 哈希"""
         actual_hash = self.get_backup_hash(backup_name, index)
         return actual_hash.lower() == expected_hash.lower()
-
-def _write_exclude_rules(rules):
-    import pickle
-
-    with open(backup_path / "excludes.exc", "ab") as f:
-        pickle.dump(rules, f)
 
 def _read_exclude_rules():
     import pickle
 
-    with open(backup_path / "excludes.exc", "rb") as f:
-        exclude_rules = pickle.load(f)
-
-    manager.exclude_rules = exclude_rules
+    try:
+        with open(backup_path / "excludes.exc", "rb") as f:
+            exclude_rules = pickle.load(f)
+        manager.exclude_rules = exclude_rules
+    except FileNotFoundError:
+        return [
+            (re.compile(r"^\..*"), "wildcard"),
+            (re.compile("backup/**".replace("**", r".*?")), "wildcard"),
+        ]
     return exclude_rules
 
 manager = BackupManager()
+
+def _write_exclude_rules(rules = manager.exclude_rules):
+    import pickle
+
+    with open(backup_path / "excludes.exc", "ab") as f:
+        pickle.dump(rules, f)
 
 def main():
     import argparse
